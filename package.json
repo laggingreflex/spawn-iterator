@@ -1,0 +1,7 @@
+{
+  "name": "spawn-iterator",
+  "version": "0.0.0",
+  "description": "Iterate through spawn output",
+  "main": "index.js",
+  "repository": "laggingreflex/spawn-iterator"
+}
