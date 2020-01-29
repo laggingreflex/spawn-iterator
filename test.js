@@ -6,3 +6,8 @@ const spawn = require('.');
     if (stderr) process.stderr.write(stderr)
   }
 })().catch(console.error);
+
+(async () => {
+  const output = await spawn('ping google.com', { shell: true });
+  console.log({ output });
+})().catch(console.error);

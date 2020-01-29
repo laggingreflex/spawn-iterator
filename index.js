@@ -5,38 +5,67 @@ module.exports = (...args) => {
   const output = { stdout: null, stderr: null };
   const cleanup = [];
 
-  let current = defer();
+  let deferred = defer();
+  const promise = {
+    onFulfilled: [],
+    onRejected: [],
+    onFinally: [],
+  };
   const iterator = {
     cp,
-    value: current.promise,
+    value: deferred.promise,
     done: false,
     next() { return this },
     [Symbol.iterator]() { return this },
+    then(onFulfilled, onRejected) {
+      if (onFulfilled) promise.onFulfilled.push(onFulfilled);
+      if (onRejected) promise.onRejected.push(onRejected);
+      return this;
+    },
+    catch (onRejected) {
+      if (onRejected) promise.onRejected.push(onRejected);
+      return this;
+    },
+    finally(onFinally) {
+      if (onFinally) promise.onFinally.push(onFinally);
+      return this;
+    },
+  };
+  const resolve = (value, done = false) => {
+    if (iterator.done) return;
+    const resolve = deferred.resolve.bind(deferred, value);
+    iterator.done = done;
+    if (!iterator.done) {
+      deferred = defer();
+      iterator.value = deferred.promise;
+    }
+    resolve();
+  };
+  const reject = (error) => {
+    if (iterator.done) return;
+    iterator.done = true;
+    deferred.reject(error);
   };
 
   cp.on('exit', code => {
-    iterator.done = true;
+    cleanup.forEach(cleanup => cleanup());
     if (code) {
-      current.reject(code);
+      reject(code);
+      promise.onRejected.forEach(onRejected => onRejected(code));
     } else {
-      current.resolve(output);
+      resolve(output, true);
+      promise.onFulfilled.forEach(onFulfilled => onFulfilled(output));
     }
-    for (const fn of cleanup) {
-      fn();
-    }
+    promise.onFinally.forEach(onFinally => onFinally(code, output));
   });
 
   for (const key in output) {
     if (!cp[key]) continue;
     const fn = data => {
-      if (iterator.done) return;
-      const resolve = current.resolve.bind(current, {
+      resolve({
         ...output,
         [key]: data,
       });
-      current = defer();
-      iterator.value = current.promise;
-      resolve();
     };
     cp[key].on('data', fn);
     cleanup.push(() => cp[key].off('data', fn));
